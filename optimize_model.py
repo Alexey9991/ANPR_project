@@ -9,12 +9,19 @@ import datetime
 import torch
 import argparse
 
+
+
 def main(video_path):
     print(torch.__version__)
     print(f"CUDA available: {torch.cuda.is_available()}")
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     print("Loading vehicle_model")
+
+    current_directory = os.getcwd()
+
+    # Construct the relative path to the 'weight' directory
+    weight_directory = os.path.join(current_directory, 'weight')
     try:
         vehicle_model = YOLO('yolov8n.pt')
         vehicle_model.to(device)
@@ -33,7 +40,7 @@ def main(video_path):
 
     print("Loading reader")
     try:
-        reader = easyocr.Reader(['en'], gpu=False,  download_enabled=True)
+        reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=False,  download_enabled=False)
     except Exception as e:
         print(f"Error loading OCR reader: {e}")
         return
