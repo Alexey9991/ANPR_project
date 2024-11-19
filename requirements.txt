@@ -1,0 +1,12 @@
+#opencv-python==4.7.0.72
+#easyocr
+#psycopg2
+#ultralytics==8.0.114
+#numpy==1.24.3
+
+opencv-python==4.7.0.72
+easyocr
+psycopg2-binary
+ultralytics==8.0.114
+numpy==1.24.3
+torch
