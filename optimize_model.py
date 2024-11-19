@@ -33,7 +33,7 @@ def main(video_path):
 
     print("Loading reader")
     try:
-        reader = easyocr.Reader(['en'], gpu=False, model_storage_directory='/weight/', download_enabled=False)
+        reader = easyocr.Reader(['en'], gpu=False,  download_enabled=True)
     except Exception as e:
         print(f"Error loading OCR reader: {e}")
         return
