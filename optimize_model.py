@@ -23,7 +23,8 @@ def main(video_path):
     # Construct the relative path to the 'weight' directory
     weight_directory = os.path.join(current_directory, 'weight')
     try:
-        vehicle_model = YOLO('yolov8n.pt')
+        vehicle_model = YOLO('yolov8n.pt', device = 'gpu')
+
         vehicle_model.to(device)
         vehicle_model.export(half=True)
     except Exception as e:
@@ -32,7 +33,7 @@ def main(video_path):
 
     print("Loading plate_model")
     try:
-        plate_model = YOLO('license_plate_detector.pt')
+        plate_model = YOLO('license_plate_detector.pt', device = 'gpu')
         plate_model.to(device)
     except Exception as e:
         print(f"Error loading plate model: {e}")
@@ -40,7 +41,7 @@ def main(video_path):
 
     print("Loading reader")
     try:
-        reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=False,  download_enabled=False)
+        reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=True,  download_enabled=False)
     except Exception as e:
         print(f"Error loading OCR reader: {e}")
         return
