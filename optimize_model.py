@@ -8,6 +8,35 @@ import csv
 import datetime
 import torch
 import argparse
+import psycopg2
+
+def connect_to_db():
+    try:
+        connection = psycopg2.connect(
+            host="localhost",
+            database="plates_db",
+            user="user",
+            password="password"
+        )
+        return connection
+    except Exception as e:
+        print(f"Error connecting to the database: {e}")
+        return None
+
+def save_plate_to_db(plate_text):
+    connection = connect_to_db()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            insert_query = "INSERT INTO plates (plate_text) VALUES (%s);"
+            cursor.execute(insert_query, (plate_text,))
+            connection.commit()
+            print(f"Number plate '{plate_text}' saved to database.")
+        except Exception as e:
+            print(f"Error saving to database: {e}")
+        finally:
+            cursor.close()
+            connection.close()
 
 
 
@@ -129,7 +158,9 @@ def main(video_path):
                         px1, py1, px2, py2 = map(int, plate_box)
                         px1, py1, px2, py2 = px1 + x1, py1 + y1, px2 + x1, py2 + y1  # Correct offset
                         print(f"Detected number plate: {plate_text}")
-                        save_plate_to_csv(plate_text)
+                        #save_plate_to_csv(plate_text)
+                        save_plate_to_db(plate_text)
+
 
 
     cap.release()
