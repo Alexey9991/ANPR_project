@@ -52,7 +52,7 @@ def main(video_path):
     # Construct the relative path to the 'weight' directory
     weight_directory = os.path.join(current_directory, 'weight')
     try:
-        vehicle_model = YOLO('yolov8n.pt', device = device)
+        vehicle_model = YOLO('yolov8n.pt')
 
         vehicle_model.to(device)
         vehicle_model.export(half=True)
@@ -62,7 +62,7 @@ def main(video_path):
 
     print("Loading plate_model")
     try:
-        plate_model = YOLO('license_plate_detector.pt', device = device)
+        plate_model = YOLO('license_plate_detector.pt')
         plate_model.to(device)
     except Exception as e:
         print(f"Error loading plate model: {e}")
