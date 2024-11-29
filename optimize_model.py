@@ -52,10 +52,10 @@ def main(video_path):
     # Construct the relative path to the 'weight' directory
     weight_directory = os.path.join(current_directory, 'weight')
     try:
-        vehicle_model = YOLO('yolov8n.pt')
-
+        vehicle_model = YOLO('yolov8n.pt').half()
         vehicle_model.to(device)
         vehicle_model.export(half=True)
+        vehicle_model = torch.jit.load('yolov8n.torchscript', map_location=device)
     except Exception as e:
         print(f"Error loading vehicle model: {e}")
         return
