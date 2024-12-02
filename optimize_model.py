@@ -4,8 +4,8 @@ import torch
 import argparse
 import psycopg2
 import easyocr
-import os
 import numpy as np
+
 
 def connect_to_db():
     try:
@@ -19,6 +19,7 @@ def connect_to_db():
     except Exception as e:
         print(f"Error connecting to the database: {e}")
         return None
+
 
 def save_plate_to_db(plate_text):
     connection = connect_to_db()
@@ -34,6 +35,26 @@ def save_plate_to_db(plate_text):
         finally:
             cursor.close()
             connection.close()
+
+
+def preprocess_frame_with_padding(frame, target_size=640):
+    """
+    Изменяет размер изображения с сохранением пропорций и добавлением отступов.
+    """
+    h, w = frame.shape[:2]
+    scale = min(target_size / h, target_size / w)
+    nh, nw = int(h * scale), int(w * scale)
+    resized_frame = cv2.resize(frame, (nw, nh))
+
+    top = (target_size - nh) // 2
+    bottom = target_size - nh - top
+    left = (target_size - nw) // 2
+    right = target_size - nw - left
+
+    padded_frame = cv2.copyMakeBorder(resized_frame, top, bottom, left, right, cv2.BORDER_CONSTANT,
+                                      value=(114, 114, 114))
+    return padded_frame
+
 
 def main(video_path):
     print(torch.__version__)
@@ -52,12 +73,14 @@ def main(video_path):
 
     # Initialize EasyOCR
     print("Initializing EasyOCR...")
-    current_directory = os.getcwd()
-    weight_directory = os.path.join(current_directory, 'weight')
-    reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=torch.cuda.is_available())  # Use GPU if available
+    reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())  # Use GPU if available
 
     def yolo_detection(model, frame):
-        frame_tensor = torch.from_numpy(frame).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
+        # Предварительная обработка кадра
+        processed_frame = preprocess_frame_with_padding(frame)
+
+        # Конвертация в тензор
+        frame_tensor = torch.from_numpy(processed_frame).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
         with torch.no_grad():
             results = model(frame_tensor)[0]
         return results.boxes.data.tolist()
@@ -113,6 +136,7 @@ def main(video_path):
             print(f"Detection failed: {e}")
 
     cap.release()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Vehicle and License Plate Detection")
