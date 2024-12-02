@@ -3,7 +3,7 @@ import cv2
 import torch
 import argparse
 import psycopg2
-from paddleocr import PaddleOCR
+import easyocr
 import numpy as np
 
 def connect_to_db():
@@ -49,9 +49,9 @@ def main(video_path):
 
     print("Models loaded successfully.")
 
-    # Initialize PaddleOCR
-    print("Initializing PaddleOCR...")
-    ocr = PaddleOCR(use_gpu=torch.cuda.is_available(), lang='en')
+    # Initialize EasyOCR
+    print("Initializing EasyOCR...")
+    reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())  # Use GPU if available
 
     def yolo_detection(model, frame):
         frame_tensor = torch.from_numpy(frame).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
@@ -60,11 +60,10 @@ def main(video_path):
         return results.boxes.data.tolist()
 
     def recognize_plate_text(cropped_plate):
-        # Convert cropped image to the format required by PaddleOCR
-        cropped_plate = cv2.cvtColor(cropped_plate, cv2.COLOR_BGR2RGB)
-        results = ocr.ocr(cropped_plate, cls=False)
-        if results and len(results[0]) > 0:
-            return results[0][0][1][0]  # Extract text from results
+        # OCR processing
+        results = reader.readtext(cropped_plate)
+        if results and len(results) > 0:
+            return results[0][1]  # Extract recognized text
         return None
 
     cap = cv2.VideoCapture(video_path)
@@ -101,7 +100,7 @@ def main(video_path):
                     px1, py1, px2, py2, p_score, p_class = map(int, plate_box)
                     cropped_plate = vehicle_plate[py1:py2, px1:px2]
 
-                    # Recognize text using PaddleOCR
+                    # Recognize text using EasyOCR
                     plate_text = recognize_plate_text(cropped_plate)
                     if plate_text:
                         print(f"Detected plate text: {plate_text}")
