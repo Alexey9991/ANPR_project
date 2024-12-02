@@ -4,6 +4,7 @@ import torch
 import argparse
 import psycopg2
 import easyocr
+import os
 import numpy as np
 
 
@@ -70,6 +71,10 @@ def main(video_path):
         return
 
     print("Models loaded successfully.")
+    current_directory = os.getcwd()
+
+    # Construct the relative path to the 'weight' directory
+    weight_directory = os.path.join(current_directory, 'weight')
 
     # Initialize EasyOCR
     print("Initializing EasyOCR...")
