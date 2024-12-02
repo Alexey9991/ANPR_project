@@ -78,7 +78,7 @@ def main(video_path):
 
     # Initialize EasyOCR
     print("Initializing EasyOCR...")
-    reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())  # Use GPU if available
+    reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=torch.cuda.is_available())  # Use GPU if available
 
     def yolo_detection(model, frame):
         # Предварительная обработка кадра
