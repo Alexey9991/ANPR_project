@@ -4,6 +4,7 @@ import torch
 import argparse
 import psycopg2
 import easyocr
+import os
 import numpy as np
 
 def connect_to_db():
@@ -51,7 +52,9 @@ def main(video_path):
 
     # Initialize EasyOCR
     print("Initializing EasyOCR...")
-    reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())  # Use GPU if available
+    current_directory = os.getcwd()
+    weight_directory = os.path.join(current_directory, 'weight')
+    reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=torch.cuda.is_available())  # Use GPU if available
 
     def yolo_detection(model, frame):
         frame_tensor = torch.from_numpy(frame).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
