@@ -143,7 +143,7 @@ if __name__ == "__main__":
     parser.add_argument("video_path", help="Path to the video file")
     parser.add_argument("--db_host", default="10.251.3.11", help="Database host")
     parser.add_argument("--db_name", required=True, help="Database name") # Database name is required
-    parser.add_argument("--db_user", default="postgres", help="Database user")
+    parser.add_argument("--db_user", default="alex", help="Database user")
     parser.add_argument("--db_password", default="123456Lsr", help="Database password")
     args = parser.parse_args()
 
