@@ -8,13 +8,13 @@ import os
 import numpy as np
 
 
-def connect_to_db():
+def connect_to_db(host, database, user, password):
     try:
         connection = psycopg2.connect(
-            host="localhost",
-            database="plates_db",
-            user="user",
-            password="password"
+            host=host,
+            database=database,
+            user=user,
+            password=password
         )
         return connection
     except Exception as e:
@@ -22,8 +22,7 @@ def connect_to_db():
         return None
 
 
-def save_plate_to_db(plate_text):
-    connection = connect_to_db()
+def save_plate_to_db(plate_text, connection):
     if connection:
         try:
             cursor = connection.cursor()
@@ -35,13 +34,11 @@ def save_plate_to_db(plate_text):
             print(f"Error saving to database: {e}")
         finally:
             cursor.close()
-            connection.close()
+
 
 
 def preprocess_frame_with_padding(frame, target_size=640):
-    """
-    Изменяет размер изображения с сохранением пропорций и добавлением отступов.
-    """
+    """Изменяет размер изображения с сохранением пропорций и добавлением отступов."""
     h, w = frame.shape[:2]
     scale = min(target_size / h, target_size / w)
     nh, nw = int(h * scale), int(w * scale)
@@ -57,7 +54,7 @@ def preprocess_frame_with_padding(frame, target_size=640):
     return padded_frame
 
 
-def main(video_path):
+def main(video_path, db_host, db_name, db_user, db_password):
     print(torch.__version__)
     print(f"CUDA available: {torch.cuda.is_available()}")
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -72,29 +69,22 @@ def main(video_path):
 
     print("Models loaded successfully.")
     current_directory = os.getcwd()
-
-    # Construct the relative path to the 'weight' directory
     weight_directory = os.path.join(current_directory, 'weight')
 
-    # Initialize EasyOCR
     print("Initializing EasyOCR...")
-    reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=torch.cuda.is_available())  # Use GPU if available
+    reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=torch.cuda.is_available())
 
     def yolo_detection(model, frame):
-        # Предварительная обработка кадра
         processed_frame = preprocess_frame_with_padding(frame)
-
-        # Конвертация в тензор
         frame_tensor = torch.from_numpy(processed_frame).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
         with torch.no_grad():
             results = model(frame_tensor)[0]
         return results.boxes.data.tolist()
 
     def recognize_plate_text(cropped_plate):
-        # OCR processing
         results = reader.readtext(cropped_plate)
         if results and len(results) > 0:
-            return results[0][1]  # Extract recognized text
+            return results[0][1]
         return None
 
     cap = cv2.VideoCapture(video_path)
@@ -103,9 +93,13 @@ def main(video_path):
         return
 
     print("Video opened successfully.")
-
     frame_skip = 10
     frame_count = 0
+
+
+    connection = connect_to_db(db_host, db_name, db_user, db_password)
+    if not connection:
+        return
 
     while True:
         ret, frame = cap.read()
@@ -117,35 +111,39 @@ def main(video_path):
             continue
 
         try:
-            # Detect vehicles
             vehicle_boxes = yolo_detection(vehicle_model, frame)
 
             for box in vehicle_boxes:
                 x1, y1, x2, y2, score, class_id = map(int, box)
                 vehicle_plate = frame[y1:y2, x1:x2]
 
-                # Detect plates
                 plate_boxes = yolo_detection(plate_model, vehicle_plate)
 
                 for plate_box in plate_boxes:
                     px1, py1, px2, py2, p_score, p_class = map(int, plate_box)
                     cropped_plate = vehicle_plate[py1:py2, px1:px2]
 
-                    # Recognize text using EasyOCR
                     plate_text = recognize_plate_text(cropped_plate)
                     if plate_text:
                         print(f"Detected plate text: {plate_text}")
-                        save_plate_to_db(plate_text)
+                        save_plate_to_db(plate_text, connection)
 
         except Exception as e:
             print(f"Detection failed: {e}")
 
     cap.release()
+    if connection:
+        connection.close()
+
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Vehicle and License Plate Detection")
     parser.add_argument("video_path", help="Path to the video file")
+    parser.add_argument("--db_host", default="10.251.3.11", help="Database host")
+    parser.add_argument("--db_name", required=True, help="Database name") # Database name is required
+    parser.add_argument("--db_user", default="postgres", help="Database user")
+    parser.add_argument("--db_password", default="123456", help="Database password")
     args = parser.parse_args()
 
-    main(args.video_path)
+    main(args.video_path, args.db_host, args.db_name, args.db_user, args.db_password)
