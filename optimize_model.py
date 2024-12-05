@@ -14,7 +14,8 @@ def connect_to_db(host, database, user, password):
             host=host,
             database=database,
             user=user,
-            password=password
+            password=password,
+            client_encoding='utf8'
         )
         return connection
     except Exception as e:
