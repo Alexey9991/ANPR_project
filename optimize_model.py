@@ -125,9 +125,11 @@ def main(video_path, db_host, db_name, db_user, db_password):
                     px1, py1, px2, py2 = px1 + x1, py1 + y1, px2 + x1, py2 + y1
                     print(px1, py1, px2, py2)
                     cropped_plate = vehicle_plate[py1:py2, px1:px2]
+                    '''
                     if cropped_plate.size == 0:
                         print("number plate is too small")
                         continue
+                    '''
                     plate_text = recognize_plate_text(vehicle_plate)
                     if plate_text:
                         print(f"Detected plate text: {plate_text}")
