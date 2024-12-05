@@ -6,7 +6,6 @@ import psycopg2
 import easyocr
 import os
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor
 
 
 def connect_to_db(host, database, user, password):
@@ -38,6 +37,7 @@ def save_plate_to_db(plate_text, connection):
             cursor.close()
 
 
+
 def preprocess_frame_with_padding(frame, target_size=640):
     """Изменяет размер изображения с сохранением пропорций и добавлением отступов."""
     h, w = frame.shape[:2]
@@ -53,40 +53,6 @@ def preprocess_frame_with_padding(frame, target_size=640):
     padded_frame = cv2.copyMakeBorder(resized_frame, top, bottom, left, right, cv2.BORDER_CONSTANT,
                                       value=(114, 114, 114))
     return padded_frame
-
-
-def process_vehicle_plate(vehicle_plate, plate_model, reader, device):
-    """Обрабатывает область с машиной, ищет рамку номера и распознаёт текст."""
-    try:
-        plate_boxes = yolo_detection(plate_model, vehicle_plate, device)
-        for plate_box in plate_boxes:
-            px1, py1, px2, py2, p_score, p_class = map(int, plate_box)
-            cropped_plate = vehicle_plate[py1:py2, px1:px2]
-            if cropped_plate.size == 0 or cropped_plate.shape[0] < 10 or cropped_plate.shape[1] < 10:
-                continue
-            plate_text = recognize_plate_text(cropped_plate, reader)
-            if plate_text:
-                return plate_text, plate_box
-    except Exception as e:
-        print(f"Error processing vehicle plate: {e}")
-    return None, None
-
-
-def yolo_detection(model, frame, device):
-    """Выполняет детекцию объектов с помощью YOLO."""
-    processed_frame = preprocess_frame_with_padding(frame)
-    frame_tensor = torch.from_numpy(processed_frame).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
-    with torch.no_grad():
-        results = model(frame_tensor)[0]
-    return results.boxes.data.tolist()
-
-
-def recognize_plate_text(cropped_plate, reader):
-    """Распознаёт текст на номере с использованием EasyOCR."""
-    results = reader.readtext(cropped_plate)
-    if results and len(results) > 0:
-        return results[0][1]
-    return None
 
 
 def main(video_path, db_host, db_name, db_user, db_password):
@@ -109,6 +75,19 @@ def main(video_path, db_host, db_name, db_user, db_password):
     print("Initializing EasyOCR...")
     reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=torch.cuda.is_available())
 
+    def yolo_detection(model, frame):
+        processed_frame = preprocess_frame_with_padding(frame)
+        frame_tensor = torch.from_numpy(processed_frame).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
+        with torch.no_grad():
+            results = model(frame_tensor)[0]
+        return results.boxes.data.tolist()
+
+    def recognize_plate_text(cropped_plate):
+        results = reader.readtext(cropped_plate)
+        if results and len(results) > 0:
+            return results[0][1]
+        return None
+
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"Error: Could not open video file at {video_path}")
@@ -117,6 +96,7 @@ def main(video_path, db_host, db_name, db_user, db_password):
     print("Video opened successfully.")
     frame_skip = 10
     frame_count = 0
+
 
     connection = connect_to_db(db_host, db_name, db_user, db_password)
     if not connection:
@@ -132,23 +112,26 @@ def main(video_path, db_host, db_name, db_user, db_password):
             continue
 
         try:
-            vehicle_boxes = yolo_detection(vehicle_model, frame, device)
+            vehicle_boxes = yolo_detection(vehicle_model, frame)
+            future = []
+            for vehicle_box in vehicle_boxes:
+                x1, y1, x2, y2, score, class_id = map(int, vehicle_box)
+                vehicle_plate = frame[y1:y2, x1:x2]
 
-            if vehicle_boxes:
-                futures = []
-                with ThreadPoolExecutor() as executor:
-                    for vehicle_box in vehicle_boxes:
-                        x1, y1, x2, y2, score, class_id = map(int, vehicle_box)
-                        vehicle_plate = frame[y1:y2, x1:x2]
-                        futures.append(executor.submit(process_vehicle_plate, vehicle_plate, plate_model, reader, device))
+                plate_boxes = yolo_detection(plate_model, vehicle_plate)
 
-                    for future in futures:
-                        plate_text, plate_box = future.result()
-                        if plate_text and plate_box:
-                            px1, py1, px2, py2 = map(int, plate_box)
-                            px1, py1, px2, py2 = px1 + x1, py1 + y1, px2 + x1, py2 + y1  # Корректируем смещение
-                            print(f"Detected number plate: {plate_text}")
-                            save_plate_to_db(plate_text, connection)
+                for plate_box in plate_boxes:
+                    px1, py1, px2, py2, p_score, p_class = map(int, plate_box)
+                    px1, py1, px2, py2 = px1 + x1, py1 + y1, px2 + x1, py2 + y1
+                    cropped_plate = vehicle_plate[py1:py2, px1:px2]
+                    if cropped_plate.size == 0:
+                        print("number plate is too small")
+                        continue
+                    plate_text = recognize_plate_text(cropped_plate)
+                    if plate_text:
+                        print(f"Detected plate text: {plate_text}")
+                        save_plate_to_db(plate_text, connection)
+
         except Exception as e:
             print(f"Detection failed: {e}")
 
@@ -157,11 +140,12 @@ def main(video_path, db_host, db_name, db_user, db_password):
         connection.close()
 
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Vehicle and License Plate Detection")
     parser.add_argument("video_path", help="Path to the video file")
     parser.add_argument("--db_host", default="10.251.3.11", help="Database host")
-    parser.add_argument("--db_name", required=True, help="Database name")  # Database name is required
+    parser.add_argument("--db_name", required=True, help="Database name") # Database name is required
     parser.add_argument("--db_user", default="alex", help="Database user")
     parser.add_argument("--db_password", default="123456Lsr", help="Database password")
     args = parser.parse_args()
