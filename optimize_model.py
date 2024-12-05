@@ -122,6 +122,7 @@ def main(video_path, db_host, db_name, db_user, db_password):
 
                 for plate_box in plate_boxes:
                     px1, py1, px2, py2, p_score, p_class = map(int, plate_box)
+                    px1, py1, px2, py2 = px1 + x1, py1 + y1, px2 + x1, py2 + y1
                     cropped_plate = vehicle_plate[py1:py2, px1:px2]
                     if cropped_plate.size == 0:
                         print("number plate is too small")
