@@ -130,7 +130,7 @@ def main(video_path, db_host, db_name, db_user, db_password):
                         print("number plate is too small")
                         continue
                     '''
-                    plate_text = recognize_plate_text(vehicle_plate)
+                    plate_text = recognize_plate_text(cropped_plate)
                     if plate_text:
                         print(f"Detected plate text: {plate_text}")
                         save_plate_to_db(plate_text, connection)
