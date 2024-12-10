@@ -144,6 +144,7 @@ def main(video_path, db_host, db_name, db_user, db_password):
                 if plate_text and plate_box:
                     px1, py1, px2, py2 = map(int, plate_box)
                     px1, py1, px2, py2 = px1 + x1, py1 + y1, px2 + x1, py2 + y1  # Correct offset
+                    save_plate_to_db(plate_text, connection)
                     print(f"Detected number plate: {plate_text}")
         '''
         except Exception as e:
