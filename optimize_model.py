@@ -74,13 +74,33 @@ def main(video_path, db_host, db_name, db_user, db_password):
 
     print("Initializing EasyOCR...")
     reader = easyocr.Reader(['en'], model_storage_directory=weight_directory, gpu=torch.cuda.is_available())
+    vehicles = [2, 3, 5, 7]
 
-    def yolo_detection(model, frame):
-        processed_frame = preprocess_frame_with_padding(frame)
-        frame_tensor = torch.from_numpy(processed_frame).permute(2, 0, 1).unsqueeze(0).float().to(device) / 255.0
-        with torch.no_grad():
-            results = model(frame_tensor)[0]
-        return results.boxes.data.tolist()
+    def yolo_detection(frame):
+        results = vehicle_model(frame)[0]
+        coordinates = []
+        for result in results.boxes.data.tolist():
+            x1, y1, x2, y2, score, class_id = result
+            if int(class_id) in vehicles:
+                coordinates.append((x1, y1, x2, y2))
+        return coordinates if coordinates else None
+
+    def number_plate_detection(frame):
+        frame = cv2.resize(frame, (640, 640)) #  Resize here
+        results = plate_model(frame)[0]
+        for result in results.boxes.data.tolist():
+            x1, y1, x2, y2, score, class_id = map(int, result)
+            cropped_image = frame[y1:y2, x1:x2]
+            try:
+                ocr_result = reader.readtext(cropped_image)
+                if ocr_result:
+                    return ocr_result[0][1], (x1, y1, x2, y2)
+            except Exception as e:
+                print(f"OCR failed: {e}")
+        return None, None
+
+    def process_vehicle_plate(vehicle_plate):
+        return number_plate_detection(vehicle_plate)
 
     def recognize_plate_text(cropped_plate):
         results = reader.readtext(cropped_plate)
@@ -111,34 +131,24 @@ def main(video_path, db_host, db_name, db_user, db_password):
         if frame_count % frame_skip != 0:
             continue
 
-        try:
-            vehicle_boxes = yolo_detection(vehicle_model, frame)
-            future = []
+        vehicle_boxes = yolo_detection(frame)
+
+        if vehicle_boxes:
             for vehicle_box in vehicle_boxes:
-                x1, y1, x2, y2, score, class_id = map(int, vehicle_box)
+                x1, y1, x2, y2 = map(int, vehicle_box)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)  # Рисуем рамку вокруг ТС
+
                 vehicle_plate = frame[y1:y2, x1:x2]
-                print(x1, y1, x2, y2)
+                plate_text, plate_box = number_plate_detection(vehicle_plate) # Вызываем функцию напрямую
 
-                plate_boxes = yolo_detection(plate_model, vehicle_plate)
-
-                for plate_box in plate_boxes:
-                    px1, py1, px2, py2, p_score, p_class = map(int, plate_box)
-                    #px1, py1, px2, py2 = px1 + x1, py1 + y1, px2 + x1, py2 + y1
-                    print(px1, py1, px2, py2)
-                    cropped_plate = vehicle_plate[py1:py2, px1:px2]
-                    '''
-                    if cropped_plate.size == 0:
-                        print("number plate is too small")
-                        continue
-                    '''
-                    plate_text = recognize_plate_text(cropped_plate)
-                    if plate_text:
-                        print(f"Detected plate text: {plate_text}")
-                        save_plate_to_db(plate_text, connection)
-
+                if plate_text and plate_box:
+                    px1, py1, px2, py2 = map(int, plate_box)
+                    px1, py1, px2, py2 = px1 + x1, py1 + y1, px2 + x1, py2 + y1  # Correct offset
+                    print(f"Detected number plate: {plate_text}")
+        '''
         except Exception as e:
             print(f"Detection failed: {e}")
-
+        '''
     cap.release()
     if connection:
         connection.close()
