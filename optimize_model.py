@@ -117,6 +117,7 @@ def main(video_path, db_host, db_name, db_user, db_password):
             for vehicle_box in vehicle_boxes:
                 x1, y1, x2, y2, score, class_id = map(int, vehicle_box)
                 vehicle_plate = frame[y1:y2, x1:x2]
+                print(x1, y1, x2, y2)
 
                 plate_boxes = yolo_detection(plate_model, vehicle_plate)
 
