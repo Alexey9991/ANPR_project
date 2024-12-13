@@ -29,7 +29,7 @@ def save_plate_to_db(plate_text, video_path, connection):
             insert_query = "INSERT INTO plates (plate_text, video_path) VALUES (%s, %s)"
             cursor.execute(insert_query, (plate_text, video_path))
             connection.commit()
-            print(f"Number plate '{plate_text}' saved to database.")
+            print(f"Number plate {plate_text} saved to database. Path to video {video_path}")
         except Exception as e:
             print(f"Error saving to database: {e}")
         finally:
