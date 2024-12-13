@@ -22,12 +22,12 @@ def connect_to_db(host, database, user, password):
         print(f"Error connecting to the database: {e}")
         return None
 
-def save_plate_to_db(plate_text, connection):
+def save_plate_to_db(plate_text, video_path, connection):
     if connection:
         try:
             cursor = connection.cursor()
-            insert_query = "INSERT INTO plates (plate_text) VALUES (%s);"
-            cursor.execute(insert_query, (plate_text,))
+            insert_query = "INSERT INTO plates (plate_text, video_path) VALUES (%s, %s)"
+            cursor.execute(insert_query, (plate_text, video_path))
             connection.commit()
             print(f"Number plate '{plate_text}' saved to database.")
         except Exception as e:
@@ -104,7 +104,7 @@ def process_video(video_path, db_host, db_name, db_user, db_password, device, ve
                 plate_text, plate_box = number_plate_detection(vehicle_plate)
 
                 if plate_text and plate_box:
-                    save_plate_to_db(plate_text, connection)
+                    save_plate_to_db(plate_text, video_path, connection)
                     print(f"Detected number plate: {plate_text}")
 
     cap.release()
